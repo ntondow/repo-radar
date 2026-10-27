@@ -1,0 +1,901 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Repo Radar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a flat instrument panel. Filters sit in a sticky band; results are a dense,
+   scannable table where velocity is drawn as a bar, not just a number. Accent is a
+   single petrol blue used only for state and action. */
+:root {
+  --bg: #f6f7f8;
+  --surface: #ffffff;
+  --surface-2: #eef0f2;
+  --fg: #1b2027;
+  --muted: #5d6673;
+  --line: #d9dde2;
+  --accent: #0f6b7a;
+  --accent-fg: #ffffff;
+  --accent-soft: #d7eef1;
+  --warn: #9a5b00;
+  --warn-soft: #fff1d6;
+  --bad: #a3322b;
+  --bad-soft: #fde3e0;
+  --hn: #d35400;
+  --sans: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111519; --surface: #181d23; --surface-2: #20262e; --fg: #e4e8ec; --muted: #94a0ad;
+    --line: #2d353f; --accent: #4fb4c4; --accent-fg: #0b1316; --accent-soft: #163b42;
+    --warn: #e5a93c; --warn-soft: #3a2c0f; --bad: #f08a82; --bad-soft: #3f1c19; --hn: #ff8c42;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111519; --surface: #181d23; --surface-2: #20262e; --fg: #e4e8ec; --muted: #94a0ad;
+  --line: #2d353f; --accent: #4fb4c4; --accent-fg: #0b1316; --accent-soft: #163b42;
+  --warn: #e5a93c; --warn-soft: #3a2c0f; --bad: #f08a82; --bad-soft: #3f1c19; --hn: #ff8c42;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--fg); font: 14px/1.45 var(--sans);
+  padding-block: 0 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+a { color: inherit; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header {
+  display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding-block: 14px 10px; border-bottom: 1px solid var(--line);
+}
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.brand .sub { color: var(--muted); font-family: var(--mono); font-size: 12px; }
+nav.tabs { display: flex; gap: 2px; margin-left: auto; }
+nav.tabs button {
+  background: none; border: 0; padding: 6px 12px; border-radius: 4px; color: var(--muted); font-weight: 500;
+}
+nav.tabs button[aria-selected="true"] { background: var(--surface-2); color: var(--fg); }
+.icon-btn { background: none; border: 1px solid var(--line); border-radius: 4px; padding: 5px 10px; color: var(--muted); }
+.icon-btn:hover { color: var(--fg); }
+
+.panel { display: none; }
+.panel.active { display: block; }
+
+.toolbar {
+  position: sticky; top: 0; z-index: 5; background: var(--bg);
+  padding-block: 12px 10px; border-bottom: 1px solid var(--line);
+  display: grid; gap: 10px;
+}
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.row > * { min-width: 0; }
+.field { display: flex; flex-direction: column; gap: 3px; }
+.field label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+input[type="text"], input[type="password"], input[type="number"], select, textarea {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 7px 9px;
+}
+input[type="text"].grow { flex: 1 1 260px; }
+textarea { width: 100%; resize: vertical; }
+.btn {
+  background: var(--accent); color: var(--accent-fg); border: 0; border-radius: 4px;
+  padding: 8px 14px; font-weight: 600;
+}
+.btn:disabled { opacity: .55; cursor: default; }
+.btn.secondary { background: var(--surface-2); color: var(--fg); border: 1px solid var(--line); font-weight: 500; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+  padding: 3px 10px; font-size: 12.5px; color: var(--muted);
+}
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--fg); }
+.chip.preset { font-weight: 500; }
+.chip.topic { font-family: var(--mono); font-size: 12px; }
+.chip.topic .x { margin-left: 6px; opacity: .6; }
+.status { color: var(--muted); font-size: 12.5px; font-family: var(--mono); }
+
+.banner {
+  margin-top: 10px; padding: 9px 12px; border-radius: 4px; font-size: 13px;
+  background: var(--warn-soft); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 35%, transparent);
+}
+.banner.bad { background: var(--bad-soft); color: var(--bad); border-color: color-mix(in srgb, var(--bad) 35%, transparent); }
+
+.table-wrap { overflow-x: auto; margin-top: 10px; }
+table.results { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+table.results th {
+  text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
+  padding: 8px 8px 6px; border-bottom: 1px solid var(--line); white-space: nowrap; font-weight: 500;
+}
+table.results th.sortable { cursor: pointer; }
+table.results th.sorted { color: var(--fg); }
+table.results td { padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.results tr.repo:hover td { background: var(--surface); }
+td.num { text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+td.name { min-width: 220px; }
+td.name a { font-weight: 600; text-decoration: none; }
+td.name a:hover { text-decoration: underline; }
+td.name .desc { color: var(--muted); display: block; margin-top: 2px; max-width: 60ch; }
+td.name .topics { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 5px; }
+td.name .topics span { font-family: var(--mono); font-size: 11px; background: var(--surface-2); padding: 1px 6px; border-radius: 3px; color: var(--muted); }
+td.vel { min-width: 120px; }
+.velbar { display: flex; align-items: center; gap: 8px; }
+.velbar .bar { height: 6px; background: var(--surface-2); border-radius: 3px; flex: 1 1 60px; overflow: hidden; }
+.velbar .bar i { display: block; height: 100%; background: var(--accent); }
+.velbar .n { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 12.5px; min-width: 42px; text-align: right; }
+.lang { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+.hnb {
+  display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 11.5px;
+  color: var(--hn); text-decoration: none; border: 1px solid color-mix(in srgb, var(--hn) 45%, transparent);
+  border-radius: 3px; padding: 1px 6px; white-space: nowrap;
+}
+.hnb b { font-weight: 500; }
+.star {
+  background: none; border: 0; font-size: 16px; line-height: 1; color: var(--muted); padding: 2px 4px;
+}
+.star[aria-pressed="true"] { color: var(--warn); }
+.expand { background: none; border: 0; color: var(--muted); font-family: var(--mono); font-size: 12px; padding: 2px 4px; }
+tr.readme td { background: var(--surface); padding: 10px 14px 14px; }
+.readme-body {
+  font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; max-width: 90ch; color: var(--fg);
+  max-height: 320px; overflow: auto; border-left: 2px solid var(--line); padding-left: 12px;
+}
+.fit { display: inline-block; font-family: var(--mono); font-size: 11.5px; padding: 1px 6px; border-radius: 3px; background: var(--accent-soft); color: var(--fg); margin-bottom: 4px; }
+.verdict { color: var(--fg); font-size: 13px; margin-top: 4px; max-width: 60ch; }
+.pushed-old { color: var(--bad); }
+
+.empty { padding: 36px 8px; color: var(--muted); text-align: center; }
+.empty code { font-family: var(--mono); }
+
+/* Build this */
+.build-intro { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 14px; margin-top: 14px; }
+@media (max-width: 760px) { .build-intro { grid-template-columns: 1fr; } }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 14px; }
+.card h2 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+.card p.hint { color: var(--muted); margin: 0 0 8px; font-size: 13px; }
+.blocks { display: grid; gap: 14px; margin-top: 16px; }
+.block { border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.block > summary {
+  list-style: none; cursor: pointer; padding: 12px 14px; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap;
+}
+.block > summary::-webkit-details-marker { display: none; }
+.block > summary h3 { margin: 0; font-size: 15px; font-weight: 600; }
+.block > summary .role { color: var(--muted); flex: 1 1 300px; min-width: 0; }
+.block > summary .count { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.block .meta { padding: 0 14px 10px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.block .meta .bvb { font-size: 13px; color: var(--muted); flex: 1 1 320px; }
+.block .meta .queries { display: flex; gap: 5px; flex-wrap: wrap; }
+.block .meta .queries code { font-family: var(--mono); font-size: 11.5px; background: var(--surface-2); padding: 1px 6px; border-radius: 3px; }
+.block .table-wrap { margin: 0; }
+.block table.results td:first-child, .block table.results th:first-child { padding-left: 14px; }
+
+.stream {
+  font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: pre-wrap; max-height: 160px; overflow: auto;
+  border-left: 2px solid var(--line); padding-left: 10px; margin-top: 8px;
+}
+
+/* Settings drawer */
+dialog.settings {
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--fg);
+  width: min(560px, calc(100vw - 32px)); padding: 0;
+}
+dialog.settings::backdrop { background: rgba(0,0,0,.35); }
+dialog.settings form { padding: 18px; display: grid; gap: 14px; }
+dialog.settings h2 { margin: 0; font-size: 16px; }
+dialog.settings .note { color: var(--muted); font-size: 12.5px; margin: 0; }
+dialog.settings .actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+kbd { font-family: var(--mono); font-size: 11px; background: var(--surface-2); padding: 1px 5px; border-radius: 3px; border: 1px solid var(--line); }
+@media (prefers-reduced-motion: no-preference) {
+  .velbar .bar i { transition: width .25s ease; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <h1>Repo Radar</h1>
+    <span class="sub" id="rate-status">GitHub: not yet called</span>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="search" id="tab-search">Search</button>
+    <button role="tab" aria-selected="false" data-tab="build" id="tab-build">Build this</button>
+    <button role="tab" aria-selected="false" data-tab="watch" id="tab-watch">Watchlist <span id="watch-count"></span></button>
+  </nav>
+  <button class="icon-btn" id="open-settings" title="Settings: tokens, model, stack">Settings</button>
+</header>
+
+<!-- ============ SEARCH ============ -->
+<section class="panel active" id="panel-search" role="tabpanel">
+  <div class="toolbar">
+    <div class="row">
+      <input type="text" class="grow" id="q" placeholder="Keywords (optional) — e.g. claude code hooks, spec driven, mcp server" autocomplete="off">
+      <button class="btn" id="run-search">Search</button>
+      <span class="status" id="search-status"></span>
+    </div>
+    <div class="row">
+      <span class="field"><label>Presets</label>
+        <span class="chips" id="presets"></span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="field" style="flex:1 1 320px"><label>Topics (one search per topic, merged)</label>
+        <span class="row">
+          <span class="chips" id="topics"></span>
+          <input type="text" id="topic-add" placeholder="+ add topic" style="width:140px" autocomplete="off">
+        </span>
+      </span>
+    </div>
+    <div class="row">
+      <span class="field"><label>Language</label>
+        <select id="lang">
+          <option value="">Any</option>
+          <option>TypeScript</option><option>JavaScript</option><option>Python</option><option>Go</option>
+          <option>Rust</option><option>Shell</option><option>Swift</option><option>Kotlin</option><option>Java</option><option>C#</option>
+        </select>
+      </span>
+      <span class="field"><label>Min stars</label>
+        <input type="number" id="min-stars" value="50" min="0" step="10" style="width:90px">
+      </span>
+      <span class="field"><label>Created within</label>
+        <select id="created">
+          <option value="7">7 days</option><option value="30">30 days</option><option value="90" selected>90 days</option>
+          <option value="180">180 days</option><option value="365">1 year</option><option value="">Any</option>
+        </select>
+      </span>
+      <span class="field"><label>Pushed within</label>
+        <select id="pushed">
+          <option value="14">14 days</option><option value="30" selected>30 days</option><option value="90">90 days</option><option value="">Any</option>
+        </select>
+      </span>
+      <span class="field"><label>Sort</label>
+        <select id="sort">
+          <option value="velocity" selected>Stars / day</option>
+          <option value="stars">Total stars</option>
+          <option value="pushed">Last push</option>
+          <option value="created">Newest</option>
+        </select>
+      </span>
+      <span class="field"><label>&nbsp;</label>
+        <label style="text-transform:none;letter-spacing:0;font-size:13px;color:var(--fg);display:flex;gap:6px;align-items:center">
+          <input type="checkbox" id="hn-on" checked> HN badges
+        </label>
+      </span>
+    </div>
+  </div>
+  <div id="search-banner" hidden></div>
+  <div id="search-results"></div>
+</section>
+
+<!-- ============ BUILD THIS ============ -->
+<section class="panel" id="panel-build" role="tabpanel">
+  <div class="build-intro">
+    <div class="card">
+      <h2>Describe what you're building</h2>
+      <p class="hint">Claude splits it into building blocks, writes two GitHub queries per block, and the page runs them. Expand a block and click <em>Rank</em> for a per-repo verdict. Without a GitHub token (Settings) you get 10 searches a minute, so 5+ blocks may pause partway.</p>
+      <textarea id="build-desc" rows="5" placeholder="e.g. A tenant-screening tool: OCR pay stubs and bank statements, verify the arithmetic, flag synthetic identities, and produce a reviewer-facing report."></textarea>
+      <div class="row" style="margin-top:8px">
+        <button class="btn" id="run-build">Break it down</button>
+        <button class="btn secondary" id="stop-build" hidden>Stop</button>
+        <span class="status" id="build-status"></span>
+      </div>
+      <div class="stream" id="build-stream" hidden></div>
+    </div>
+    <div class="card">
+      <h2>My stack</h2>
+      <p class="hint">Sent with every request so "buy vs. build" and rankings fit your setup. Edit freely.</p>
+      <textarea id="stack" rows="6"></textarea>
+    </div>
+  </div>
+  <div id="build-banner" hidden></div>
+  <div class="blocks" id="blocks"></div>
+</section>
+
+<!-- ============ WATCHLIST ============ -->
+<section class="panel" id="panel-watch" role="tabpanel">
+  <div class="row" style="margin-top:14px">
+    <span class="status" id="watch-status"></span>
+    <button class="btn secondary" id="watch-export">Copy as markdown</button>
+    <button class="btn secondary" id="watch-refresh">Refresh stars</button>
+  </div>
+  <div id="watch-results"></div>
+</section>
+
+<!-- ============ SETTINGS ============ -->
+<dialog class="settings" id="settings">
+  <form method="dialog">
+    <h2>Settings</h2>
+    <p class="note">Everything here stays in this browser's localStorage. Nothing is sent anywhere except directly to api.github.com, hn.algolia.com and api.anthropic.com.</p>
+    <span class="field"><label>GitHub token (optional)</label>
+      <input type="password" id="gh-token" placeholder="ghp_… or github_pat_…" autocomplete="off">
+      <span class="note">Without one: 10 searches/min. With one: 30/min. Fine-grained token with no scopes is enough for public repos.</span>
+    </span>
+    <span class="field"><label>Anthropic API key (for Build this)</label>
+      <input type="password" id="anthropic-key" placeholder="sk-ant-…" autocomplete="off">
+      <span class="note">Called directly from the browser. Use a key you're comfortable keeping on this machine.</span>
+    </span>
+    <span class="field"><label>Model</label>
+      <input type="text" id="model" placeholder="claude-sonnet-5-5" autocomplete="off">
+    </span>
+    <div class="actions">
+      <button class="btn secondary" value="cancel" type="button" id="settings-cancel">Cancel</button>
+      <button class="btn" value="save" id="settings-save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+'use strict';
+
+// ---------- constants ----------
+const PRESETS = {
+  'AI coding tools': ['claude-code', 'coding-agent', 'ai-agents', 'mcp', 'llm'],
+  'Claude Code ecosystem': ['claude-code', 'claude-skills', 'mcp-server', 'claude'],
+  'Agent frameworks': ['ai-agents', 'agent-framework', 'multi-agent', 'agentic'],
+  'Dev tools': ['developer-tools', 'cli', 'devtools', 'productivity'],
+  'RAG / infra': ['rag', 'vector-database', 'llm-inference', 'embeddings'],
+  'Document AI': ['ocr', 'document-ai', 'pdf', 'document-parsing'],
+};
+const DEFAULT_STACK = `Solo builder. Next.js (App Router) + TypeScript, Supabase (Postgres, auth, storage), Google Cloud Run, Anthropic API, Twilio. Builds with Claude Code. Prefers TypeScript libraries, MIT/Apache licenses, and services with a free or usage-based tier. Domain: real estate operations and proptech (leasing, tenant screening, rent-stabilization compliance).`;
+const DEFAULT_MODEL = 'claude-sonnet-5-5';
+const LS = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+
+// ---------- state ----------
+const state = {
+  topics: [...PRESETS['AI coding tools']],
+  preset: 'AI coding tools',
+  results: [],          // search tab
+  hnCache: new Map(),   // full_name -> {points, num_comments, objectID, title} | null
+  readmeCache: new Map(),
+  watch: LS.get('rr.watch', {}),  // full_name -> repo snapshot
+  settings: {
+    ghToken: LS.get('rr.ghToken', ''),
+    anthropicKey: LS.get('rr.anthropicKey', ''),
+    model: LS.get('rr.model', DEFAULT_MODEL),
+  },
+  stack: LS.get('rr.stack', DEFAULT_STACK),
+  rate: { remaining: null, reset: null },
+  buildAbort: null,
+  blocks: [],
+};
+const topicsSaved = LS.get('rr.topics', null);
+if (Array.isArray(topicsSaved) && topicsSaved.length) { state.topics = topicsSaved; state.preset = null; }
+
+// ---------- helpers ----------
+const $ = (s, el = document) => el.querySelector(s);
+const el = (tag, attrs = {}, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') n.className = v;
+    else if (k === 'html') n.innerHTML = v;
+    else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
+    else if (v === false || v == null) continue;
+    else n.setAttribute(k, v === true ? '' : v);
+  }
+  for (const k of kids.flat()) if (k != null) n.append(k.nodeType ? k : document.createTextNode(String(k)));
+  return n;
+};
+const daysAgo = (iso) => Math.max(0, (Date.now() - new Date(iso).getTime()) / 86400000);
+const isoDaysBack = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+const fmtInt = (n) => n.toLocaleString('en-US');
+const fmtVel = (v) => v >= 100 ? Math.round(v).toString() : v >= 10 ? v.toFixed(1) : v.toFixed(2);
+const fmtAge = (iso) => {
+  const d = daysAgo(iso);
+  if (d < 1) return 'today';
+  if (d < 30) return `${Math.round(d)}d`;
+  if (d < 365) return `${Math.round(d / 30)}mo`;
+  return `${(d / 365).toFixed(1)}y`;
+};
+const normalize = (r) => ({
+  id: r.id, full_name: r.full_name, html_url: r.html_url, description: r.description || '',
+  language: r.language || '', stars: r.stargazers_count || 0, forks: r.forks_count || 0,
+  created_at: r.created_at, pushed_at: r.pushed_at, topics: r.topics || [],
+  license: r.license?.spdx_id || '', archived: !!r.archived,
+  velocity: (r.stargazers_count || 0) / Math.max(1, daysAgo(r.created_at)),
+});
+const ghHeaders = () => {
+  const h = { 'Accept': 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' };
+  if (state.settings.ghToken) h['Authorization'] = 'Bearer ' + state.settings.ghToken;
+  return h;
+};
+function updateRateFromResponse(res) {
+  const rem = res.headers.get('x-ratelimit-remaining');
+  const reset = res.headers.get('x-ratelimit-reset');
+  if (rem != null) state.rate.remaining = Number(rem);
+  if (reset != null) state.rate.reset = Number(reset) * 1000;
+  renderRate();
+}
+function renderRate() {
+  const s = $('#rate-status');
+  if (state.rate.remaining == null) { s.textContent = state.settings.ghToken ? 'GitHub: token set' : 'GitHub: anonymous (10 searches/min)'; return; }
+  const secs = state.rate.reset ? Math.max(0, Math.round((state.rate.reset - Date.now()) / 1000)) : null;
+  s.textContent = `GitHub: ${state.rate.remaining} searches left` + (secs != null ? ` · resets in ${secs}s` : '');
+}
+setInterval(() => { if (state.rate.reset) renderRate(); }, 5000);
+
+class RateLimitError extends Error { constructor(resetMs) { super('rate limited'); this.resetMs = resetMs; } }
+
+async function ghSearch(q, { sort = 'stars', perPage = 50 } = {}) {
+  const url = `https://api.github.com/search/repositories?q=${encodeURIComponent(q)}&sort=${sort}&order=desc&per_page=${perPage}`;
+  const res = await fetch(url, { headers: ghHeaders() });
+  updateRateFromResponse(res);
+  if (res.status === 403 || res.status === 429) throw new RateLimitError(state.rate.reset);
+  if (res.status === 401) throw new Error('GitHub rejected the token (401). Check it in Settings.');
+  if (!res.ok) {
+    let msg = `GitHub returned ${res.status}`;
+    try { const j = await res.json(); if (j.message) msg += `: ${j.message}`; } catch {}
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  return (data.items || []).map(normalize);
+}
+
+function buildQuery({ text = '', topic = '', language = '', minStars = 0, createdDays = '', pushedDays = '' }) {
+  const parts = [];
+  if (text.trim()) parts.push(text.trim());
+  if (topic) parts.push(`topic:${topic}`);
+  if (language) parts.push(`language:"${language}"`);
+  if (minStars > 0) parts.push(`stars:>=${minStars}`);
+  if (createdDays) parts.push(`created:>=${isoDaysBack(Number(createdDays))}`);
+  if (pushedDays) parts.push(`pushed:>=${isoDaysBack(Number(pushedDays))}`);
+  parts.push('archived:false');
+  return parts.join(' ');
+}
+
+async function runQueries(queries, onProgress) {
+  const seen = new Map();
+  let done = 0;
+  await Promise.all(queries.map(async (q) => {
+    const items = await ghSearch(q);
+    for (const r of items) if (!seen.has(r.id)) seen.set(r.id, r);
+    done++; onProgress?.(done, queries.length);
+  }));
+  return [...seen.values()];
+}
+
+function sortRepos(list, key) {
+  const c = {
+    velocity: (a, b) => b.velocity - a.velocity,
+    stars: (a, b) => b.stars - a.stars,
+    pushed: (a, b) => new Date(b.pushed_at) - new Date(a.pushed_at),
+    created: (a, b) => new Date(b.created_at) - new Date(a.created_at),
+  }[key] || ((a, b) => b.velocity - a.velocity);
+  return [...list].sort(c);
+}
+
+// ---------- HN ----------
+async function hnLookup(fullName) {
+  if (state.hnCache.has(fullName)) return state.hnCache.get(fullName);
+  let best = null;
+  try {
+    const url = `https://hn.algolia.com/api/v1/search?query=${encodeURIComponent(fullName)}&tags=story&restrictSearchableAttributes=url&hitsPerPage=10`;
+    const res = await fetch(url);
+    if (res.ok) {
+      const data = await res.json();
+      const want = ('github.com/' + fullName).toLowerCase();
+      for (const h of data.hits || []) {
+        const u = (h.url || '').toLowerCase();
+        if (u.includes(want) && (!best || (h.points || 0) > best.points)) {
+          best = { points: h.points || 0, num_comments: h.num_comments || 0, objectID: h.objectID, title: h.title };
+        }
+      }
+    }
+  } catch {}
+  state.hnCache.set(fullName, best);
+  return best;
+}
+async function decorateHN(repos, container) {
+  if (!$('#hn-on').checked) return;
+  const chunks = [];
+  for (let i = 0; i < repos.length; i += 6) chunks.push(repos.slice(i, i + 6));
+  for (const chunk of chunks) {
+    await Promise.all(chunk.map(async (r) => {
+      const hit = await hnLookup(r.full_name);
+      if (!hit) return;
+      const slot = container.querySelector(`[data-hn="${CSS.escape(r.full_name)}"]`);
+      if (!slot) return;
+      slot.replaceChildren(el('a', { class: 'hnb', href: `https://news.ycombinator.com/item?id=${hit.objectID}`, target: '_blank', rel: 'noopener', title: hit.title },
+        'HN ', el('b', {}, hit.points), ' · ', el('b', {}, hit.num_comments), ' comments'));
+    }));
+  }
+}
+
+// ---------- README ----------
+async function readmeExcerpt(fullName) {
+  if (state.readmeCache.has(fullName)) return state.readmeCache.get(fullName);
+  let text = '';
+  try {
+    const res = await fetch(`https://api.github.com/repos/${fullName}/readme`, { headers: { ...ghHeaders(), 'Accept': 'application/vnd.github.raw+json' } });
+    if (res.ok) {
+      const raw = await res.text();
+      text = raw
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+        .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+        .replace(/^\s*[-=]{3,}\s*$/gm, '')
+        .replace(/`{3}[\s\S]*?`{3}/g, (m) => m.length > 400 ? '[code block]' : m)
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+        .slice(0, 2200);
+    } else if (res.status === 403 || res.status === 429) text = '(GitHub rate limit hit — README unavailable right now)';
+    else text = `(No README, or GitHub returned ${res.status})`;
+  } catch { text = '(Could not load README)'; }
+  state.readmeCache.set(fullName, text);
+  return text;
+}
+
+// ---------- rendering: repo table ----------
+function renderTable(repos, { container, sortKey = 'velocity', onSort, extras = {} }) {
+  container.replaceChildren();
+  if (!repos.length) {
+    container.append(el('div', { class: 'empty' }, 'No repos match. Loosen a filter — lower min stars, widen the created window, or drop a topic.'));
+    return;
+  }
+  const maxVel = Math.max(...repos.map((r) => r.velocity), 0.0001);
+  const th = (label, key, cls = '') => el('th', {
+    class: `${cls} ${onSort ? 'sortable' : ''} ${sortKey === key ? 'sorted' : ''}`,
+    onclick: onSort ? () => onSort(key) : null,
+  }, label + (sortKey === key ? ' ↓' : ''));
+  const table = el('table', { class: 'results' },
+    el('thead', {}, el('tr', {},
+      el('th', {}, ''), el('th', {}, 'Repo'), th('Stars / day', 'velocity'), th('Stars', 'stars', 'num'),
+      el('th', {}, 'Lang'), th('Created', 'created'), th('Pushed', 'pushed'), el('th', {}, 'HN'), el('th', {}, ''),
+    )),
+  );
+  const tbody = el('tbody');
+  for (const r of repos) {
+    const extra = extras[r.full_name];
+    const row = el('tr', { class: 'repo' },
+      el('td', {}, el('button', { class: 'star', 'aria-pressed': !!state.watch[r.full_name], title: 'Watchlist', onclick: (e) => toggleWatch(r, e.currentTarget) }, '★')),
+      el('td', { class: 'name' },
+        extra ? el('span', { class: 'fit' }, `fit ${extra.fit}/5`) : null,
+        el('a', { href: r.html_url, target: '_blank', rel: 'noopener' }, r.full_name),
+        r.license ? el('span', { class: 'lang' }, `  ${r.license}`) : null,
+        el('span', { class: 'desc' }, r.description),
+        extra ? el('div', { class: 'verdict' }, extra.verdict) : null,
+        r.topics.length ? el('span', { class: 'topics' }, r.topics.slice(0, 7).map((t) => el('span', {}, t))) : null,
+      ),
+      el('td', { class: 'vel' }, el('div', { class: 'velbar' },
+        el('div', { class: 'bar' }, el('i', { style: `width:${Math.max(2, 100 * r.velocity / maxVel)}%` })),
+        el('span', { class: 'n' }, fmtVel(r.velocity)))),
+      el('td', { class: 'num' }, fmtInt(r.stars)),
+      el('td', {}, el('span', { class: 'lang' }, r.language || '—')),
+      el('td', { class: 'num' }, fmtAge(r.created_at)),
+      el('td', { class: `num ${daysAgo(r.pushed_at) > 60 ? 'pushed-old' : ''}` }, fmtAge(r.pushed_at)),
+      el('td', { 'data-hn': r.full_name }),
+      el('td', {}, el('button', { class: 'expand', title: 'README excerpt', onclick: (e) => toggleReadme(r, row, e.currentTarget) }, 'readme')),
+    );
+    tbody.append(row);
+  }
+  table.append(tbody);
+  const wrap = el('div', { class: 'table-wrap' }, table);
+  container.append(wrap);
+  decorateHN(repos, wrap);
+}
+
+async function toggleReadme(r, row, btn) {
+  const next = row.nextElementSibling;
+  if (next && next.classList.contains('readme')) { next.remove(); btn.textContent = 'readme'; return; }
+  btn.textContent = 'loading…';
+  const text = await readmeExcerpt(r.full_name);
+  btn.textContent = 'close';
+  const tr = el('tr', { class: 'readme' }, el('td', { colspan: 9 }, el('div', { class: 'readme-body' }, text)));
+  row.after(tr);
+}
+
+function toggleWatch(r, btn) {
+  if (state.watch[r.full_name]) delete state.watch[r.full_name];
+  else state.watch[r.full_name] = { ...r, added_at: new Date().toISOString() };
+  LS.set('rr.watch', state.watch);
+  btn.setAttribute('aria-pressed', String(!!state.watch[r.full_name]));
+  renderWatchCount();
+  if ($('#panel-watch').classList.contains('active')) renderWatch();
+}
+function renderWatchCount() {
+  const n = Object.keys(state.watch).length;
+  $('#watch-count').textContent = n ? `(${n})` : '';
+}
+
+function showBanner(id, msg, bad = false) {
+  const b = $(id); b.hidden = !msg; b.className = 'banner' + (bad ? ' bad' : ''); b.textContent = msg || '';
+}
+function describeError(e) {
+  if (e instanceof RateLimitError) {
+    const secs = e.resetMs ? Math.max(1, Math.round((e.resetMs - Date.now()) / 1000)) : 60;
+    return `GitHub rate limit hit. Try again in ~${secs}s, or add a GitHub token in Settings for 3× the limit. Results already on screen are kept.`;
+  }
+  if (e instanceof TypeError && /fetch/i.test(e.message)) return 'Network error reaching GitHub. If you opened this file from an unusual location, check that your browser allows the request.';
+  return e.message || String(e);
+}
+
+// ---------- search tab ----------
+function renderPresets() {
+  const c = $('#presets'); c.replaceChildren();
+  for (const name of Object.keys(PRESETS)) {
+    c.append(el('button', { class: 'chip preset', 'aria-pressed': state.preset === name, onclick: () => {
+      state.preset = name; state.topics = [...PRESETS[name]]; LS.set('rr.topics', state.topics);
+      renderPresets(); renderTopics(); runSearch();
+    } }, name));
+  }
+}
+function renderTopics() {
+  const c = $('#topics'); c.replaceChildren();
+  for (const t of state.topics) {
+    c.append(el('button', { class: 'chip topic', 'aria-pressed': true, title: 'Remove', onclick: () => {
+      state.topics = state.topics.filter((x) => x !== t); state.preset = null; LS.set('rr.topics', state.topics);
+      renderPresets(); renderTopics();
+    } }, t, el('span', { class: 'x' }, '×')));
+  }
+}
+$('#topic-add').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const t = e.target.value.trim().toLowerCase().replace(/\s+/g, '-');
+  if (t && !state.topics.includes(t)) { state.topics.push(t); state.preset = null; LS.set('rr.topics', state.topics); renderPresets(); renderTopics(); }
+  e.target.value = '';
+});
+
+let searchSort = 'velocity';
+async function runSearch() {
+  const text = $('#q').value;
+  const opts = {
+    language: $('#lang').value, minStars: Number($('#min-stars').value) || 0,
+    createdDays: $('#created').value, pushedDays: $('#pushed').value,
+  };
+  searchSort = $('#sort').value;
+  const topics = state.topics.slice(0, 6);
+  const queries = topics.length ? topics.map((topic) => buildQuery({ text, topic, ...opts })) : [buildQuery({ text, ...opts })];
+  if (!text.trim() && !topics.length) { showBanner('#search-banner', 'Add a topic or type a keyword.'); return; }
+  const btn = $('#run-search'); btn.disabled = true;
+  showBanner('#search-banner', '');
+  $('#search-status').textContent = `running ${queries.length} ${queries.length === 1 ? 'query' : 'queries'}…`;
+  try {
+    const repos = await runQueries(queries, (d, n) => { $('#search-status').textContent = `${d}/${n} queries`; });
+    state.results = repos;
+    $('#search-status').textContent = `${repos.length} repos`;
+    renderSearchResults();
+  } catch (e) {
+    showBanner('#search-banner', describeError(e), !(e instanceof RateLimitError));
+    $('#search-status').textContent = '';
+  } finally { btn.disabled = false; }
+}
+function renderSearchResults() {
+  renderTable(sortRepos(state.results, searchSort), {
+    container: $('#search-results'), sortKey: searchSort,
+    onSort: (k) => { searchSort = k; $('#sort').value = k; renderSearchResults(); },
+  });
+}
+$('#run-search').addEventListener('click', runSearch);
+$('#q').addEventListener('keydown', (e) => { if (e.key === 'Enter') runSearch(); });
+$('#sort').addEventListener('change', () => { searchSort = $('#sort').value; renderSearchResults(); });
+$('#hn-on').addEventListener('change', () => renderSearchResults());
+
+// ---------- Build this ----------
+async function anthropic(messages, { system, maxTokens = 4000, signal, onText } = {}) {
+  if (!state.settings.anthropicKey) throw new Error('Add your Anthropic API key in Settings first.');
+  const body = { model: state.settings.model || DEFAULT_MODEL, max_tokens: maxTokens, system, messages, stream: !!onText };
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST', signal,
+    headers: {
+      'content-type': 'application/json', 'x-api-key': state.settings.anthropicKey,
+      'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let msg = `Anthropic returned ${res.status}`;
+    try { const j = await res.json(); if (j.error?.message) msg += `: ${j.error.message}`; } catch {}
+    throw new Error(msg);
+  }
+  if (!onText) {
+    const j = await res.json();
+    return (j.content || []).filter((c) => c.type === 'text').map((c) => c.text).join('');
+  }
+  const reader = res.body.getReader(); const dec = new TextDecoder();
+  let buf = '', text = '';
+  while (true) {
+    const { value, done } = await reader.read(); if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const lines = buf.split('\n'); buf = lines.pop();
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue;
+      try {
+        const ev = JSON.parse(line.slice(6));
+        if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') { text += ev.delta.text; onText(text); }
+      } catch {}
+    }
+  }
+  return text;
+}
+function parseJSON(text) {
+  try { return JSON.parse(text); } catch {}
+  const fence = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fence) { try { return JSON.parse(fence[1]); } catch {} }
+  const a = text.search(/[\[{]/), b = Math.max(text.lastIndexOf('}'), text.lastIndexOf(']'));
+  if (a >= 0 && b > a) { try { return JSON.parse(text.slice(a, b + 1)); } catch {} }
+  throw new Error('Could not parse the model reply as JSON. Try again or simplify the description.');
+}
+
+const DECOMPOSE_SYSTEM = `You help a software builder find open-source building blocks on GitHub. Given a description of what they want to build and their stack, break the project into the distinct technical components it needs, and for each write GitHub repository search queries that would find the best open-source options.
+
+Rules for queries: GitHub ANDs every term, so keep each query narrow. Each query is EITHER a short keyword phrase (2-3 words, as a human would type into GitHub search, e.g. "document parsing OCR") OR one GitHub topic tag (lowercase, hyphenated, a real popular topic such as "ocr", "pdf", "document-ai", "rag", "mcp-server"), never both. Give exactly 2 queries per block: the first a keyword phrase, the second a topic. An optional language may be added when it clearly matters. Prefer queries that find libraries and tools, not tutorials.
+
+Reply with ONLY a JSON object, no prose, in this exact shape:
+{"blocks":[{"name":"short block name","role":"one sentence: what this component does in their project","queries":[{"text":"keyword phrase"},{"topic":"topic-a","language":"Python"}],"buy_vs_build":"one or two sentences: whether to use an existing repo, a managed service, or just write it, given their stack"}]}
+Give 3 to 6 blocks. Order them by how central they are to the project.`;
+
+async function runBuild() {
+  const desc = $('#build-desc').value.trim();
+  if (!desc) { showBanner('#build-banner', 'Describe what you want to build first.'); return; }
+  showBanner('#build-banner', '');
+  state.stack = $('#stack').value; LS.set('rr.stack', state.stack);
+  const btn = $('#run-build'), stop = $('#stop-build'), stream = $('#build-stream'), status = $('#build-status');
+  btn.disabled = true; stop.hidden = false; stream.hidden = false; stream.textContent = 'Thinking…'; status.textContent = '';
+  const ctl = new AbortController(); state.buildAbort = ctl;
+  let plan;
+  try {
+    const text = await anthropic(
+      [{ role: 'user', content: `Project description:\n${desc}\n\nBuilder's stack and preferences:\n${state.stack}` }],
+      { system: DECOMPOSE_SYSTEM, signal: ctl.signal, onText: (t) => { stream.textContent = t; stream.scrollTop = stream.scrollHeight; } },
+    );
+    plan = parseJSON(text);
+    if (!Array.isArray(plan.blocks) || !plan.blocks.length) throw new Error('The model returned no blocks. Try rephrasing the description.');
+  } catch (e) {
+    if (e.name === 'AbortError') status.textContent = 'stopped';
+    else showBanner('#build-banner', e.message || String(e), true);
+    btn.disabled = false; stop.hidden = true; stream.hidden = true; return;
+  }
+  stream.hidden = true;
+  state.blocks = plan.blocks.map((b) => ({ ...b, repos: [], status: 'pending', rank: null }));
+  renderBlocks();
+  status.textContent = `${state.blocks.length} blocks — searching GitHub…`;
+  // Run blocks sequentially (each block fans out its 2-3 queries) so a rate limit stops cleanly.
+  for (const b of state.blocks) {
+    if (ctl.signal.aborted) { b.status = 'stopped'; renderBlocks(); continue; }
+    b.status = 'searching'; renderBlocks();
+    const queries = (b.queries || []).slice(0, 2).map((q) => buildQuery({
+      text: q.topic ? '' : (q.text || ''), topic: q.topic || (Array.isArray(q.topics) ? q.topics[0] : '') || '',
+      language: q.language || '', minStars: 25, pushedDays: 180,
+    }));
+    try {
+      b.repos = sortRepos(await runQueries(queries), 'velocity').slice(0, 12);
+      b.status = 'done';
+    } catch (e) {
+      b.status = 'error'; b.error = describeError(e);
+      renderBlocks();
+      if (e instanceof RateLimitError) { showBanner('#build-banner', b.error); break; }
+    }
+    renderBlocks();
+  }
+  status.textContent = `${state.blocks.filter((b) => b.status === 'done').length}/${state.blocks.length} blocks searched`;
+  btn.disabled = false; stop.hidden = true; state.buildAbort = null;
+}
+$('#run-build').addEventListener('click', runBuild);
+$('#stop-build').addEventListener('click', () => state.buildAbort?.abort());
+
+function renderBlocks() {
+  const c = $('#blocks');
+  const openState = new Map([...c.querySelectorAll('details')].map((d, i) => [i, d.open]));
+  c.replaceChildren();
+  state.blocks.forEach((b, i) => {
+    const count = { pending: 'queued', searching: 'searching…', done: `${b.repos.length} repos`, error: 'error', stopped: 'stopped' }[b.status];
+    const d = el('details', { class: 'block', open: openState.has(i) ? openState.get(i) : i === 0 },
+      el('summary', {}, el('h3', {}, b.name), el('span', { class: 'role' }, b.role), el('span', { class: 'count' }, count)),
+      el('div', { class: 'meta' },
+        el('div', { class: 'bvb' }, b.buy_vs_build || ''),
+        el('div', { class: 'queries' }, (b.queries || []).slice(0, 2).map((q) => el('code', {}, [q.topic ? `topic:${q.topic}` : q.text, q.language ? `lang:${q.language}` : ''].filter(Boolean).join(' ')))),
+        b.status === 'done' && b.repos.length ? el('button', { class: 'btn secondary', disabled: b.ranking, onclick: () => rankBlock(b) }, b.rank ? 'Re-rank' : b.ranking ? 'Ranking…' : 'Rank for my use case') : null,
+      ),
+    );
+    const body = el('div');
+    if (b.status === 'error') body.append(el('div', { class: 'banner bad', style: 'margin:0 14px 14px' }, b.error));
+    else if (b.status === 'done') renderTable(b.repos, { container: body, extras: b.rank || {} });
+    d.append(body);
+    c.append(d);
+  });
+}
+
+const RANK_SYSTEM = `You evaluate open-source GitHub repositories as candidate building blocks for a specific project. For each repo, judge fit for the stated block and the builder's stack, maturity (stars, recency of pushes, license), and name the main caveat. Be concrete and skeptical: a high star count with no recent pushes is a risk; a non-TypeScript library matters for a TypeScript stack unless it's a service or CLI.
+
+Reply with ONLY a JSON array, no prose: [{"full_name":"owner/repo","fit":1-5,"verdict":"one or two sentences: why it fits or doesn't, and the caveat"}]. Include every repo given, in order of fit, best first.`;
+async function rankBlock(b) {
+  b.ranking = true; renderBlocks();
+  const list = b.repos.map((r) => ({
+    full_name: r.full_name, description: r.description.slice(0, 200), language: r.language, stars: r.stars,
+    stars_per_day: Number(fmtVel(r.velocity)), created: r.created_at.slice(0, 10), pushed: r.pushed_at.slice(0, 10),
+    topics: r.topics.slice(0, 8), license: r.license,
+  }));
+  try {
+    const text = await anthropic([{ role: 'user', content:
+      `Project: ${$('#build-desc').value.trim()}\n\nBuilder's stack: ${state.stack}\n\nBlock: ${b.name} — ${b.role}\n\nCandidate repos:\n${JSON.stringify(list, null, 1)}` }],
+      { system: RANK_SYSTEM, maxTokens: 3000 });
+    const arr = parseJSON(text);
+    if (!Array.isArray(arr)) throw new Error('Unexpected reply shape.');
+    const rank = {}; const order = [];
+    for (const x of arr) { if (x && x.full_name) { rank[x.full_name] = { fit: Math.min(5, Math.max(1, Number(x.fit) || 1)), verdict: String(x.verdict || '') }; order.push(x.full_name); } }
+    b.rank = rank;
+    b.repos = [...b.repos].sort((a, c) => (order.indexOf(a.full_name) + 1 || 99) - (order.indexOf(c.full_name) + 1 || 99));
+  } catch (e) {
+    showBanner('#build-banner', e.message || String(e), true);
+  } finally { b.ranking = false; renderBlocks(); }
+}
+
+// ---------- watchlist ----------
+function renderWatch() {
+  const list = sortRepos(Object.values(state.watch), 'velocity');
+  $('#watch-status').textContent = list.length ? `${list.length} starred` : 'Nothing starred yet. Hit ★ on any row.';
+  renderTable(list, { container: $('#watch-results') });
+}
+$('#watch-export').addEventListener('click', async (e) => {
+  const list = sortRepos(Object.values(state.watch), 'velocity');
+  const md = ['| Repo | Stars | Stars/day | Lang | Pushed | Notes |', '|---|---:|---:|---|---|---|',
+    ...list.map((r) => `| [${r.full_name}](${r.html_url}) | ${fmtInt(r.stars)} | ${fmtVel(r.velocity)} | ${r.language || ''} | ${r.pushed_at.slice(0, 10)} | ${r.description.replace(/\|/g, '/')} |`)].join('\n');
+  try { await navigator.clipboard.writeText(md); e.target.textContent = 'Copied'; setTimeout(() => e.target.textContent = 'Copy as markdown', 1500); }
+  catch { const ta = el('textarea', { style: 'width:100%;height:200px;margin-top:8px' }, md); $('#watch-results').prepend(ta); ta.select(); }
+});
+$('#watch-refresh').addEventListener('click', async (e) => {
+  const names = Object.keys(state.watch); if (!names.length) return;
+  e.target.disabled = true;
+  try {
+    for (const n of names) {
+      const res = await fetch(`https://api.github.com/repos/${n}`, { headers: ghHeaders() });
+      if (res.ok) { const r = normalize(await res.json()); state.watch[n] = { ...state.watch[n], ...r }; }
+    }
+    LS.set('rr.watch', state.watch); renderWatch();
+  } finally { e.target.disabled = false; }
+});
+
+// ---------- tabs ----------
+for (const b of document.querySelectorAll('nav.tabs button')) {
+  b.addEventListener('click', () => {
+    for (const x of document.querySelectorAll('nav.tabs button')) x.setAttribute('aria-selected', String(x === b));
+    for (const p of document.querySelectorAll('.panel')) p.classList.toggle('active', p.id === 'panel-' + b.dataset.tab);
+    if (b.dataset.tab === 'watch') renderWatch();
+    try { location.hash = b.dataset.tab; } catch {}
+  });
+}
+
+// ---------- settings ----------
+const dlg = $('#settings');
+$('#open-settings').addEventListener('click', () => {
+  $('#gh-token').value = state.settings.ghToken; $('#anthropic-key').value = state.settings.anthropicKey; $('#model').value = state.settings.model;
+  dlg.showModal();
+});
+$('#settings-cancel').addEventListener('click', () => dlg.close());
+$('#settings-save').addEventListener('click', (e) => {
+  e.preventDefault();
+  state.settings.ghToken = $('#gh-token').value.trim(); state.settings.anthropicKey = $('#anthropic-key').value.trim();
+  state.settings.model = $('#model').value.trim() || DEFAULT_MODEL;
+  LS.set('rr.ghToken', state.settings.ghToken); LS.set('rr.anthropicKey', state.settings.anthropicKey); LS.set('rr.model', state.settings.model);
+  state.rate = { remaining: null, reset: null }; renderRate();
+  dlg.close();
+});
+$('#stack').value = state.stack;
+$('#stack').addEventListener('change', () => { state.stack = $('#stack').value; LS.set('rr.stack', state.stack); });
+
+// ---------- boot ----------
+renderPresets(); renderTopics(); renderRate(); renderWatchCount();
+const initialTab = ['search', 'build', 'watch'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'search';
+if (initialTab !== 'search') $(`#tab-${initialTab}`).click();
+if (initialTab === 'search') runSearch();
+})();
+</script>
+</body>
+</html>
